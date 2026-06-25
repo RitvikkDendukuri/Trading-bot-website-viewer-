@@ -6,7 +6,7 @@ First bot: **[Macro-Economic Sector Rotation](https://github.com/RitvikkDendukur
 
 ## What it does
 
-- **Live paper trading** — pulls 1-minute Yahoo prices every 60s, marks portfolios to market, no broker needed
+- **Live paper trading** — pulls 1-minute Yahoo prices every 60s compares it with alpaca data for the bot varifies they are the same, marks portfolios to market, no broker needed
 - **Backtest seed** — chart starts at $100k on Jan 1 2026, live line continues seamlessly from there
 - **SPY benchmark overlay** — equity chart with strategy vs SPY, dashed line for live portion
 - **Click-to-inspect trades** — click any point on the chart to see what sectors were bought/sold that day and how each contributed
@@ -14,7 +14,7 @@ First bot: **[Macro-Economic Sector Rotation](https://github.com/RitvikkDendukur
 - **Self-healing** — if the server goes down mid-day, Yahoo serves full-day 1-min bars so missing minutes backfill automatically on restart
 - **Minute today, hourly history** — current session at minute resolution, older days compressed to hourly
 - **Regime detection** — automatically detects macro regime (Recovery, Crisis, Stagflation, etc.) and rotates accordingly
-- **Alpaca mirror (optional)** — if keys are set, rebalances are also executed on a real Alpaca paper account
+
 
 ## Tech Stack
 
@@ -34,11 +34,6 @@ uvicorn app.main:app --port 8000
 
 The backtest seeds automatically on first startup. Live trading starts on the next market session.
 
-Optionally mirror to Alpaca paper:
-```bash
-export ALPACA_API_KEY=...
-export ALPACA_API_SECRET=...
-```
 
 ## Adding a bot
 
