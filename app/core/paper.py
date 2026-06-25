@@ -171,16 +171,16 @@ def tick(bot_id: str) -> None:
         px = last_row.get(t)
         op = opens.get(t)
         if px is not None and pd.notna(px) and op:
-            shares = (wt * lev) * e0 / op       # bought at the open, held for the day
-            mv = shares * float(px)             # live market value
+            shares = (wt * lev) * e0 / op
+            mv = shares * float(px)
             snapshot.append(
                 {
                     "symbol": t,
                     "qty": shares,
                     "market_value": mv,
-                    "weight": (mv / equity) if equity else 0.0,
-                    "change_pct": float(px) / op - 1.0,        # intraday move vs the open
-                    "change_amt": shares * (float(px) - op),   # $ gain/loss on the day
+                    "weight": wt,                               # target allocation, not drifted market weight
+                    "change_pct": float(px) / op - 1.0,
+                    "change_amt": shares * (float(px) - op),
                 }
             )
     db.replace_positions(bot_id, snapshot)
