@@ -109,7 +109,10 @@ def seed_bot(bot_id: str) -> None:
 
 def seed_all() -> None:
     for bot_id in registry.bot_ids():
-        seed_bot(bot_id)
+        if db.has_backtest(bot_id):
+            _refresh_recent(bot_id)
+        else:
+            seed_bot(bot_id)
     db.set_meta("last_seed", datetime.utcnow().isoformat())
 
 
@@ -156,12 +159,9 @@ def _refresh_recent(bot_id: str) -> None:
 def seed_missing() -> None:
     for bot_id in registry.bot_ids():
         if not db.has_backtest(bot_id):
-            # try pre-baked seed file first — skips the 3-5 min Yahoo download
+            # try pre-baked seed file first — no downloads, instant data
             if not _load_seed_file(bot_id):
                 seed_bot(bot_id)
-                continue
-        # always refresh the last month with fresh data in the background
-        _refresh_recent(bot_id)
 
 
 # ---------------- live engine ----------------
