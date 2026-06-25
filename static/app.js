@@ -25,17 +25,17 @@ function card(bot) {
     : '<span class="badge idle">seed</span>';
   return `
   <a class="card" href="/bot/${bot.id}">
-    <div class="row" style="align-items:center">
+    <div class="card-head">
       <h3>${bot.name}</h3>
       ${liveBadge}
     </div>
     <div class="tag">${bot.tagline || ""}</div>
-    <div class="row">
+    <div class="stats-row">
       <div class="stat"><div class="label">Equity</div><div class="value">${money(m.current_equity)}</div></div>
       <div class="stat"><div class="label">Total Return</div><div class="value ${cls(m.total_return)}">${pct(m.total_return)}</div></div>
       <div class="stat"><div class="label">vs SPY</div><div class="value ${cls(excess)}">${pct(excess)}</div></div>
     </div>
-    <div class="row">
+    <div class="stats-row">
       <div class="stat"><div class="label">Sharpe</div><div class="value">${num(m.sharpe)}</div></div>
       <div class="stat"><div class="label">Sortino</div><div class="value">${num(m.sortino)}</div></div>
       <div class="stat"><div class="label">Max DD</div><div class="value neg">${pct(m.max_drawdown)}</div></div>
