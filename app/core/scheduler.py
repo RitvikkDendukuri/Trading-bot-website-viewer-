@@ -162,6 +162,9 @@ def seed_missing() -> None:
             # try pre-baked seed file first — no downloads, instant data
             if not _load_seed_file(bot_id):
                 seed_bot(bot_id)
+                continue
+            # seed file loaded — fill gap between seed's last date and today
+            _refresh_recent(bot_id)
 
 
 # ---------------- live engine ----------------
