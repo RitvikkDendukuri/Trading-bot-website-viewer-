@@ -173,7 +173,7 @@ function renderChart() {
       },
       scales: {
         // no fixed unit: Chart.js auto-picks day/month when zoomed out, hours/minutes when zoomed in
-        x: { type: "time", grid: { color: "#ddd5c4" }, ticks: { color: "#5c554a", maxRotation: 0, autoSkip: true, font: { family: "JetBrains Mono" } } },
+        x: { type: "time", adapters: { date: { zone: "America/New_York" } }, grid: { color: "#ddd5c4" }, ticks: { color: "#5c554a", maxRotation: 0, autoSkip: true, font: { family: "JetBrains Mono" } } },
         y: { grid: { color: "#ddd5c4" }, ticks: { color: "#5c554a", font: { family: "JetBrains Mono" }, callback: (v) => "$" + (v / 1000) + "k" } },
       },
     },
