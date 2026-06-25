@@ -32,7 +32,7 @@ function card(bot) {
     <div class="tag">${bot.tagline || ""}</div>
     <div class="stats-row">
       <div class="stat"><div class="label">Equity</div><div class="value">${money(m.current_equity)}</div></div>
-      <div class="stat"><div class="label">Total Return</div><div class="value ${cls(m.total_return)}">${pct(m.total_return)}</div></div>
+      <div class="stat"><div class="label">CAGR</div><div class="value ${cls(m.cagr)}">${pct(m.cagr)}</div></div>
       <div class="stat"><div class="label">vs SPY</div><div class="value ${cls(excess)}">${pct(excess)}</div></div>
     </div>
     <div class="stats-row">

@@ -96,14 +96,6 @@ header.top h1 .dot { color: var(--accent); }
   box-shadow: 10px 10px 0 var(--ink);
   color: inherit;
 }
-.card::before {
-  content: "BOT";
-  position: absolute; top: -3px; right: -3px;
-  background: var(--accent); color: #fff;
-  font-family: "JetBrains Mono", monospace;
-  font-size: 10px; font-weight: 700; letter-spacing: 2px;
-  padding: 4px 8px; border: 3px solid var(--ink);
-}
 .card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-bottom: 2px; }
 .card h3 { margin: 6px 0 2px; font-size: 22px; font-weight: 700; letter-spacing: -.5px; }
 .card .tag { color: var(--ink-2); font-size: 13.5px; margin: 0 0 18px; min-height: 38px; }
@@ -119,8 +111,8 @@ header.top h1 .dot { color: var(--accent); }
 .stat .value { font-size: 20px; font-weight: 700; margin-top: 2px; letter-spacing: -.5px; }
 .value.pos { color: var(--up); }
 .value.neg { color: var(--down); }
-.value.pos::before { content: "▲ "; font-size: .7em; }
-.value.neg::before { content: "▼ "; font-size: .7em; }
+.value.pos::after { content: " ▲"; font-size: .6em; display: block; margin-top: 2px; }
+.value.neg::after { content: " ▼"; font-size: .6em; display: block; margin-top: 2px; }
 
 .regime {
   margin-top: 14px; font-size: 12px; font-weight: 700; letter-spacing: 1px;
