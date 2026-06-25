@@ -162,9 +162,6 @@ def seed_missing() -> None:
             # try pre-baked seed file first — no downloads, instant data
             if not _load_seed_file(bot_id):
                 seed_bot(bot_id)
-                continue
-            # seed file loaded — fill gap between seed's last date and today
-            _refresh_recent(bot_id)
 
 
 # ---------------- live engine ----------------
@@ -209,11 +206,24 @@ def _seed_loop() -> None:
             log.exception("seed loop error: %s", e)
 
 
+def _deferred_refresh() -> None:
+    # wait for seed to load and site to become responsive, then fill gaps in background
+    _stop.wait(60)
+    if _stop.is_set():
+        return
+    for bot_id in registry.bot_ids():
+        if db.has_backtest(bot_id):
+            try:
+                _refresh_recent(bot_id)
+            except Exception as e:
+                log.warning("Deferred refresh failed for %s: %s", bot_id, e)
+
+
 def start() -> None:
     db.init_db()
-    # seed once — re-running is non-deterministic because regime model is data-sensitive
     threading.Thread(target=seed_missing, daemon=True).start()
     threading.Thread(target=_poll_loop, daemon=True).start()
+    threading.Thread(target=_deferred_refresh, daemon=True).start()
     log.info("Scheduler started (poll=%ss, start_date=%s)", POLL_SECONDS, START_DATE)
 
 
