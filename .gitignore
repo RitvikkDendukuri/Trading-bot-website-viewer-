@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+.env
+data/*.db
+data/*.db-wal
+data/*.db-shm
+*.csv
+.DS_Store
+desktop.ini
+node_modules/

@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Bot — Live Desk</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/styles.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/luxon@3/build/global/luxon.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-luxon@1/dist/chartjs-adapter-luxon.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8/hammer.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
+</head>
+<body>
+  <div class="wrap">
+    <a class="back" href="/">← All bots</a>
+    <div class="detail-head">
+      <h1 id="bot-name">Loading…</h1>
+      <div>
+        <span id="live-badge"></span>
+        <a id="gh-link" href="#" target="_blank" rel="noopener">GitHub ↗</a>
+      </div>
+    </div>
+
+    <div class="statbar" id="statbar"></div>
+
+    <div class="chart-wrap">
+      <div class="chart-toolbar">
+        <div class="ranges" id="ranges">
+          <button data-range="1D">1D</button>
+          <button data-range="1W">1W</button>
+          <button data-range="1M">1M</button>
+          <button data-range="6M">6M</button>
+          <button data-range="YTD" class="active">YTD</button>
+          <button data-range="1Y">1Y</button>
+        </div>
+        <button id="focus-toggle" class="focus-btn">◎ Focus: Bot</button>
+      </div>
+      <div class="legend">
+        <span class="l-strat">Strategy</span>
+        <span class="l-spy">SPY benchmark</span>
+        <span class="muted">— dashed = live · scroll to zoom, drag to pan</span>
+        <a href="#" id="reset-zoom" style="margin-left:auto">reset zoom</a>
+      </div>
+      <canvas id="chart"></canvas>
+    </div>
+
+    <div class="panel" id="day-detail-panel" style="display:none">
+      <h2 id="day-detail-title">Trade Detail</h2>
+      <div id="day-detail-content"></div>
+    </div>
+
+    <div class="panel">
+      <h2>Current Positions</h2>
+      <table id="positions"><tbody><tr><td class="muted">No live positions yet.</td></tr></tbody></table>
+    </div>
+
+    <div class="panel">
+      <h2>Risk &amp; Benchmark Metrics</h2>
+      <div class="statbar" id="metricbar"></div>
+    </div>
+
+    <div class="panel">
+      <h2>Methodology</h2>
+      <div class="methodology" id="methodology"></div>
+    </div>
+  </div>
+  <script src="/static/bot.js"></script>
+</body>
+</html>

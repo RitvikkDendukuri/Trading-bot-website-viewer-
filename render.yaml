@@ -1,0 +1,29 @@
+# Render blueprint. A single always-on web service runs both the dashboard and
+# the bot worker threads (minute polling + daily rebalance).
+# NOTE: use a paid instance type so the service does not sleep — minute polling
+# must keep running. Add a persistent disk so the SQLite DB survives restarts.
+services:
+  - type: web
+    name: trading-bots
+    runtime: docker
+    plan: starter            # paid: avoids the free-tier sleep that would stop polling
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/health
+    disk:
+      name: bots-data
+      mountPath: /app/data
+      sizeGB: 1
+    envVars:
+      - key: POLL_SECONDS
+        value: "60"
+      - key: SEED_START_DATE
+        value: "2026-01-01"
+      - key: SEED_INITIAL_CAPITAL
+        value: "100000"
+      # Set these in the Render dashboard (do NOT commit secrets):
+      - key: ALPACA_API_KEY
+        sync: false
+      - key: ALPACA_API_SECRET
+        sync: false
+      - key: ALPACA_BASE_URL
+        value: "https://paper-api.alpaca.markets"

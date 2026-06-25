@@ -1,0 +1,269 @@
+/* ============================================================
+   Neo-brutalist trading desk.
+   Paper background, black ink, hard offset shadows, mono numbers.
+   No gradients, no blur, no glow.
+   ============================================================ */
+
+:root {
+  --paper:   #f3efe4;   /* warm newsprint */
+  --card:    #fffdf7;   /* lighter paper */
+  --ink:     #16130f;   /* near-black */
+  --ink-2:   #5c554a;   /* muted ink */
+  --line:    #16130f;   /* borders are ink */
+  --rule:    #ddd5c4;   /* hairline on paper */
+  --accent:  #ff4d00;   /* signal orange */
+  --up:      #0a7d38;   /* gains */
+  --down:    #d6332b;   /* losses */
+  --shadow:  6px 6px 0 var(--ink);
+  --shadow-sm: 3px 3px 0 var(--ink);
+}
+
+* { box-sizing: border-box; }
+
+html { background: var(--paper); }
+
+body {
+  margin: 0;
+  font-family: "Space Grotesk", "Helvetica Neue", Arial, sans-serif;
+  background:
+    repeating-linear-gradient(0deg, transparent 0 39px, rgba(22,19,15,.035) 39px 40px),
+    var(--paper);
+  color: var(--ink);
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+}
+
+a { color: var(--ink); text-decoration: none; }
+a:hover { color: var(--accent); }
+
+.wrap { max-width: 1180px; margin: 0 auto; padding: 0 24px 80px; }
+
+/* mono numerals everywhere they matter */
+.value, .stat .value, td, th, .badge, .regime, #clock, .legend {
+  font-family: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------------- masthead ---------------- */
+.masthead {
+  border-bottom: 4px solid var(--ink);
+  margin: 0 0 30px;
+  padding: 34px 0 14px;
+}
+header.top { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+header.top h1 {
+  font-size: clamp(34px, 6vw, 64px);
+  line-height: .92;
+  margin: 0;
+  font-weight: 700;
+  letter-spacing: -2px;
+  text-transform: uppercase;
+}
+header.top h1 .dot { color: var(--accent); }
+#clock {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--ink-2);
+  border: 2px solid var(--ink);
+  padding: 6px 10px;
+  background: var(--card);
+}
+.subtitle {
+  font-size: 15px;
+  color: var(--ink-2);
+  margin: 12px 0 0;
+  max-width: 60ch;
+}
+.subtitle b { color: var(--accent); font-weight: 700; }
+
+/* ---------------- bot cards grid ---------------- */
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 26px; }
+
+.card {
+  position: relative;
+  background: var(--card);
+  border: 3px solid var(--ink);
+  border-radius: 2px;
+  padding: 22px 22px 18px;
+  box-shadow: var(--shadow);
+  transition: transform .12s ease, box-shadow .12s ease;
+  display: block;
+  color: inherit;
+}
+.card:hover {
+  transform: translate(-3px, -3px);
+  box-shadow: 10px 10px 0 var(--ink);
+  color: inherit;
+}
+.card::before {
+  content: "BOT";
+  position: absolute; top: -3px; right: -3px;
+  background: var(--accent); color: #fff;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 10px; font-weight: 700; letter-spacing: 2px;
+  padding: 4px 8px; border: 3px solid var(--ink);
+}
+.card h3 { margin: 6px 0 2px; font-size: 22px; font-weight: 700; letter-spacing: -.5px; max-width: 80%; }
+.card .tag { color: var(--ink-2); font-size: 13.5px; margin: 0 0 18px; min-height: 38px; }
+
+.row { display: flex; flex-wrap: wrap; gap: 0; border-top: 2px solid var(--ink); }
+.row .stat { border-right: 2px solid var(--rule); }
+.row .stat:last-child { border-right: none; }
+.stat { flex: 1 1 30%; min-width: 96px; padding: 10px 12px 8px; }
+.stat .label {
+  color: var(--ink-2); font-size: 10px; text-transform: uppercase;
+  letter-spacing: 1.2px; font-family: "Space Grotesk", sans-serif; font-weight: 600;
+}
+.stat .value { font-size: 20px; font-weight: 700; margin-top: 2px; letter-spacing: -.5px; }
+.value.pos { color: var(--up); }
+.value.neg { color: var(--down); }
+.value.pos::before { content: "▲ "; font-size: .7em; }
+.value.neg::before { content: "▼ "; font-size: .7em; }
+
+.regime {
+  margin-top: 14px; font-size: 12px; font-weight: 700; letter-spacing: 1px;
+  text-transform: uppercase; display: inline-block;
+  background: var(--ink); color: var(--paper); padding: 5px 10px; border-radius: 2px;
+}
+
+.badge {
+  display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: 1.5px;
+  text-transform: uppercase; padding: 5px 9px; border: 2px solid var(--ink); border-radius: 2px;
+}
+.badge.live { background: var(--accent); color: #fff; }
+.badge.live::before {
+  content: "●"; margin-right: 6px; color: #fff; animation: blink 1.3s steps(1) infinite;
+}
+.badge.idle { background: var(--card); color: var(--ink-2); }
+@keyframes blink { 50% { opacity: 0; } }
+
+/* ---------------- detail page ---------------- */
+.back {
+  display: inline-block; margin: 22px 0 0; font-size: 13px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 1px; border-bottom: 2px solid var(--ink); padding-bottom: 2px;
+}
+.detail-head {
+  display: flex; align-items: flex-end; justify-content: space-between; flex-wrap: wrap; gap: 14px;
+  border-bottom: 4px solid var(--ink); padding: 18px 0 16px; margin-bottom: 26px;
+}
+.detail-head h1 { margin: 0; font-size: clamp(28px, 5vw, 46px); font-weight: 700; letter-spacing: -1.5px; text-transform: uppercase; line-height: .95; }
+.detail-head a#gh-link {
+  font-family: "JetBrains Mono", monospace; font-size: 12px; font-weight: 700; letter-spacing: 1px;
+  border: 2px solid var(--ink); padding: 7px 12px; background: var(--ink); color: var(--paper); border-radius: 2px;
+}
+.detail-head a#gh-link:hover { background: var(--accent); border-color: var(--ink); color: #fff; }
+
+.statbar {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(118px, 1fr));
+  background: var(--card); border: 3px solid var(--ink); border-radius: 2px;
+  box-shadow: var(--shadow); margin-bottom: 26px;
+}
+.statbar .stat { border-right: 2px solid var(--rule); border-bottom: 2px solid var(--rule); padding: 14px 16px; }
+
+/* SPY comparison sub-text under a metric */
+.cmp { font-size: 11px; color: var(--ink-2); margin-top: 3px; font-family: "JetBrains Mono", monospace; }
+
+/* info (i) badge + hover/focus tooltip explaining the formula */
+.info {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 15px; height: 15px; border: 1.5px solid var(--ink-2); border-radius: 50%;
+  font-size: 10px; font-style: italic; font-family: Georgia, "Times New Roman", serif;
+  color: var(--ink-2); cursor: help; position: relative; vertical-align: middle;
+}
+.info:hover, .info:focus { background: var(--ink); color: var(--paper); border-color: var(--ink); outline: none; }
+.info:hover::after, .info:focus::after {
+  content: attr(data-tip);
+  position: absolute; left: 50%; transform: translateX(-50%); bottom: 150%;
+  width: 230px; background: var(--ink); color: var(--paper);
+  padding: 9px 11px; border-radius: 2px; font-size: 11px; font-style: normal;
+  font-family: "Space Grotesk", sans-serif; font-weight: 400; line-height: 1.45;
+  letter-spacing: 0; text-transform: none; text-align: left; z-index: 20;
+  box-shadow: 4px 4px 0 rgba(0,0,0,.35); pointer-events: none; white-space: normal;
+}
+
+/* panels */
+.chart-wrap, .panel {
+  background: var(--card); border: 3px solid var(--ink); border-radius: 2px;
+  box-shadow: var(--shadow); padding: 22px; margin-bottom: 26px;
+}
+.chart-wrap canvas { max-height: 440px; }
+
+/* range selector */
+.chart-toolbar { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 14px; }
+.ranges { display: flex; gap: 0; border: 2px solid var(--ink); border-radius: 2px; width: fit-content; overflow: hidden; }
+.focus-btn {
+  font-family: "JetBrains Mono", monospace; font-size: 12px; font-weight: 700; letter-spacing: 1px;
+  padding: 7px 14px; border: 2px solid var(--ink); border-radius: 2px; background: var(--card);
+  color: var(--ink); cursor: pointer; transition: background .1s, color .1s;
+}
+.focus-btn:hover { background: var(--rule); }
+.focus-btn.active { background: var(--ink); color: var(--paper); }
+.ranges button {
+  font-family: "JetBrains Mono", monospace; font-size: 12px; font-weight: 700; letter-spacing: 1px;
+  padding: 7px 14px; border: none; border-right: 2px solid var(--ink); background: var(--card);
+  color: var(--ink); cursor: pointer; transition: background .1s, color .1s;
+}
+.ranges button:last-child { border-right: none; }
+.ranges button:hover { background: var(--rule); }
+.ranges button.active { background: var(--accent); color: #fff; }
+
+.legend { display: flex; gap: 20px; align-items: center; margin-bottom: 14px; font-size: 12px; text-transform: uppercase; letter-spacing: .5px; color: var(--ink-2); }
+.legend span::before { content: "■"; margin-right: 7px; font-size: 13px; }
+.legend .l-strat::before { color: var(--accent); }
+.legend .l-spy::before { color: var(--ink); }
+.legend #reset-zoom { font-family: "Space Grotesk", sans-serif; font-weight: 700; border-bottom: 2px solid var(--ink); }
+
+.panel h2 {
+  margin: 0 0 16px; font-size: 14px; font-weight: 700; text-transform: uppercase; letter-spacing: 2px;
+  border-bottom: 2px solid var(--ink); padding-bottom: 8px;
+}
+.methodology { color: var(--ink-2); white-space: pre-wrap; font-size: 14.5px; line-height: 1.6; }
+
+/* tables */
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th, td { text-align: right; padding: 11px 12px; border-bottom: 2px solid var(--rule); }
+th:first-child, td:first-child { text-align: left; }
+th {
+  color: var(--ink); font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: 1px;
+  border-bottom: 3px solid var(--ink); background: var(--paper);
+  font-family: "Space Grotesk", sans-serif;
+}
+tbody tr:hover { background: rgba(255,77,0,.06); }
+td.chg { font-weight: 700; white-space: nowrap; }
+td.chg.pos { color: var(--up); }
+td.chg.neg { color: var(--down); }
+td.chg .chg-amt { font-weight: 400; opacity: .75; margin-left: 6px; }
+
+/* day-detail panel */
+.day-summary {
+  display: flex; flex-wrap: wrap; gap: 0;
+  border: 2px solid var(--ink); border-radius: 2px; margin-bottom: 16px;
+}
+.day-summary .stat { border-right: 2px solid var(--rule); border-bottom: 2px solid var(--rule); padding: 12px 16px; flex: 1 1 120px; }
+.day-summary .stat:last-child { border-right: none; }
+.trade-action {
+  display: inline-block; font-family: "JetBrains Mono", monospace;
+  font-size: 10px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase;
+  padding: 3px 7px; border-radius: 2px; border: 2px solid var(--ink);
+}
+.trade-action.buy { background: var(--up); color: #fff; border-color: var(--up); }
+.trade-action.sell { background: var(--down); color: #fff; border-color: var(--down); }
+.trade-action.increase { background: rgba(10,125,56,.12); color: var(--up); }
+.trade-action.decrease { background: rgba(214,51,43,.12); color: var(--down); }
+.trade-action.hold { background: var(--card); color: var(--ink-2); }
+td .weight-bar {
+  display: inline-block; height: 6px; background: var(--accent); border-radius: 1px;
+  vertical-align: middle; margin-left: 6px;
+}
+
+.muted { color: var(--ink-2); }
+.loading {
+  color: var(--ink-2); padding: 60px; text-align: center; font-family: "JetBrains Mono", monospace;
+  text-transform: uppercase; letter-spacing: 2px; font-size: 13px;
+}
+
+@media (max-width: 560px) {
+  .card::before { display: none; }
+  header.top h1 { letter-spacing: -1px; }
+}
