@@ -90,7 +90,6 @@ async function loadDetail() {
 }
 
 function buildSeries(points) {
-  // one continuous line; remember where live begins so we can dash that segment
   const data = points.map((p) => ({ x: p.ts, y: p.value }));
   let liveStart = points.findIndex((p) => p.source === "live");
   if (liveStart < 0) liveStart = points.length;
@@ -183,7 +182,8 @@ function renderChart() {
 async function loadChart() {
   const res = await fetch(`/api/bots/${botId}/equity`);
   const data = await res.json();
-  chartData = { strategy: data.strategy || [], spy: data.spy || [] };
+  const sortByTs = (arr) => [...arr].sort((a, b) => (a.ts < b.ts ? -1 : a.ts > b.ts ? 1 : 0));
+  chartData = { strategy: sortByTs(data.strategy || []), spy: sortByTs(data.spy || []) };
   renderChart();
 }
 

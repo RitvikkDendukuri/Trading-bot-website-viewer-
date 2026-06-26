@@ -28,6 +28,7 @@ def hourly_except_latest(points: List[dict]) -> List[dict]:
                 order.append(hour)
             by_hour[hour] = p
     older = [by_hour[h] for h in sorted(order)]
+    today_points.sort(key=lambda p: p["ts"])
     return older + today_points
 
 
