@@ -1,6 +1,7 @@
 # SQLite storage — single file DB with WAL mode
 from __future__ import annotations
 
+import json
 import sqlite3
 import threading
 from contextlib import contextmanager
@@ -296,6 +297,63 @@ def get_daily_allocation(bot_id: str, date: str) -> Optional[str]:
         ).fetchone()
     return row["data"] if row else None
 
+
+
+def get_trade_history(bot_id: str, limit: int = 60, offset: int = 0) -> list[dict]:
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT date, data FROM daily_allocations"
+            " WHERE bot_id=? ORDER BY date DESC LIMIT ? OFFSET ?",
+            (bot_id, limit, offset),
+        ).fetchall()
+        # pull real equity from equity_points for each date
+        equity_map: dict[str, float] = {}
+        if rows:
+            dates = [r["date"] for r in rows]
+            placeholders = ",".join("?" for _ in dates)
+            eq_rows = conn.execute(
+                "SELECT substr(ts,1,10) AS d, MAX(value) AS v"
+                " FROM equity_points"
+                " WHERE bot_id=? AND series='strategy'"
+                f" AND substr(ts,1,10) IN ({placeholders})"
+                " GROUP BY d",
+                [bot_id] + dates,
+            ).fetchall()
+            for er in eq_rows:
+                equity_map[er["d"]] = er["v"]
+    out = []
+    prev_equity = None
+    for r in reversed(rows):
+        data = json.loads(r["data"])
+        real_eq = equity_map.get(r["date"])
+        if real_eq is None:
+            real_eq = data.get("equity", 0)
+        day_ret = 0.0
+        if prev_equity and prev_equity > 0:
+            day_ret = real_eq / prev_equity - 1.0
+        else:
+            day_ret = data.get("portfolio_return", 0)
+        out.append({
+            "date": r["date"],
+            "regime": data.get("regime", ""),
+            "leverage": data.get("leverage", 1.0),
+            "portfolio_return": round(day_ret, 4),
+            "equity": round(real_eq, 2),
+            "sectors": data.get("sectors", []),
+        })
+        prev_equity = real_eq
+    out.reverse()
+    return out
+
+
+def get_trade_months(bot_id: str) -> list[str]:
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT DISTINCT substr(date,1,7) AS m FROM daily_allocations"
+            " WHERE bot_id=? ORDER BY m DESC",
+            (bot_id,),
+        ).fetchall()
+    return [r["m"] for r in rows]
 
 
 def set_meta(key: str, value: str) -> None:

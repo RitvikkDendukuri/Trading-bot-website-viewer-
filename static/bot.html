@@ -13,15 +13,27 @@
   <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-luxon@1/dist/chartjs-adapter-luxon.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8/hammer.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
+  <script>
+    (function(){var t=localStorage.getItem("theme")||"light";document.documentElement.setAttribute("data-theme",t)})();
+  </script>
 </head>
 <body>
   <div class="wrap">
-    <a class="back" href="/">← All bots</a>
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+      <a class="back" href="/">&#8592; All bots</a>
+      <div class="top-right">
+        <span class="ws-dot" id="ws-dot" title="WebSocket disconnected"></span>
+        <button class="theme-toggle" id="theme-toggle" title="Toggle dark mode"></button>
+      </div>
+    </div>
     <div class="detail-head">
-      <h1 id="bot-name">Loading…</h1>
-      <div>
+      <h1 id="bot-name">Loading...</h1>
+      <div class="detail-head-right">
         <span id="live-badge"></span>
-        <a id="gh-link" href="#" target="_blank" rel="noopener">GitHub ↗</a>
+        <div class="nav-links">
+          <a href="#" id="trades-link">Trade Log</a>
+          <a id="gh-link" href="#" target="_blank" rel="noopener">GitHub &#8599;</a>
+        </div>
       </div>
     </div>
 
@@ -37,15 +49,24 @@
           <button data-range="YTD" class="active">YTD</button>
           <button data-range="1Y">1Y</button>
         </div>
-        <button id="focus-toggle" class="focus-btn">◎ Focus: Bot</button>
+        <button id="focus-toggle" class="focus-btn">&#9678; Focus: Bot</button>
       </div>
       <div class="legend">
         <span class="l-strat">Strategy</span>
         <span class="l-spy">SPY benchmark</span>
-        <span class="muted">— dashed = live · scroll to zoom, drag to pan</span>
+        <span class="muted">— dashed = live</span>
         <a href="#" id="reset-zoom" style="margin-left:auto">reset zoom</a>
       </div>
       <canvas id="chart"></canvas>
+    </div>
+
+    <div class="chart-wrap">
+      <h2 style="margin:0 0 12px;font-size:14px;font-weight:700;text-transform:uppercase;letter-spacing:2px;border-bottom:2px solid var(--ink);padding-bottom:8px">Drawdown</h2>
+      <div class="legend">
+        <span class="l-strat">Strategy</span>
+        <span class="l-spy">SPY benchmark</span>
+      </div>
+      <canvas id="dd-chart" style="max-height:220px"></canvas>
     </div>
 
     <div class="panel" id="day-detail-panel" style="display:none">
@@ -68,6 +89,8 @@
       <div class="methodology" id="methodology"></div>
     </div>
   </div>
+  <script src="/static/theme.js"></script>
+  <script src="/static/ws-client.js"></script>
   <script src="/static/bot.js"></script>
 </body>
 </html>

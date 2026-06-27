@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Trade Log — Live Desk</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/styles.css" />
+  <script>
+    (function(){var t=localStorage.getItem("theme")||"light";document.documentElement.setAttribute("data-theme",t)})();
+  </script>
+</head>
+<body>
+  <div class="wrap">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+      <a class="back" id="back-link" href="/">&#8592; Back to bot</a>
+      <div class="top-right">
+        <button class="theme-toggle" id="theme-toggle" title="Toggle dark mode"></button>
+      </div>
+    </div>
+    <div class="detail-head">
+      <h1 id="page-title">Trade Log</h1>
+      <div class="detail-head-right">
+        <select id="month-select" class="month-select">
+          <option value="">All months</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div id="trades-list"><div class="loading">Loading trades...</div></div>
+      <div class="pagination" id="pagination"></div>
+    </div>
+  </div>
+  <script src="/static/theme.js"></script>
+  <script src="/static/trades.js"></script>
+</body>
+</html>

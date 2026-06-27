@@ -65,23 +65,29 @@ def _build_data() -> Tuple[pd.DataFrame, pd.DataFrame]:
     if built_at and now - built_at < _CACHE_TTL and _cache["macro"] is not None:
         return _cache["macro"], _cache["prices"]  # type: ignore[return-value]
 
+    import time as _time
+
     all_tickers = (
         set(um.coreTickers.values())
         | set(um.extraTickers.values())
         | set(um.sectorTickers)
     )
     raw = {}
-    for t in sorted(all_tickers):
+    for i, t in enumerate(sorted(all_tickers)):
         s = None
-        for attempt in range(3):  # Yahoo occasionally times out; retry
+        for attempt in range(3):
             try:
                 s = um.downloadSeries(t)
             except Exception:
                 s = None
             if s is not None and not s.empty:
                 break
+            if attempt < 2:
+                _time.sleep(2)
         if s is not None and not s.empty:
             raw[t] = s
+        if i > 0 and i % 5 == 0:
+            _time.sleep(1)
 
     # macro indicators
     macro_cols = {}
@@ -123,23 +129,44 @@ def _align(macro: pd.DataFrame, prices: pd.DataFrame):
 
 
 def _build_hourly_prices(window_days: int) -> pd.DataFrame:
+    import logging
+    log = logging.getLogger("strategy")
+
     now = datetime.utcnow()
     built = _cache.get("hourly_built_at")
     if built and now - built < _CACHE_TTL and _cache.get("hourly") is not None:
         return _cache["hourly"]  # type: ignore[return-value]
 
+    import time
     import yfinance as yf
 
+    tickers = sorted(set(um.sectorTickers))
     start = (now - timedelta(days=window_days)).strftime("%Y-%m-%d")
-    data = yf.download(
-        sorted(set(um.sectorTickers)),
-        start=start,
-        interval="1h",
-        auto_adjust=False,
-        progress=False,
-    )
+    log.info("Downloading hourly data for %d tickers from %s...", len(tickers), start)
+
+    data = None
+    for attempt in range(3):
+        try:
+            data = yf.download(
+                tickers,
+                start=start,
+                interval="1h",
+                auto_adjust=False,
+                progress=False,
+            )
+            if data is not None and not data.empty:
+                break
+            log.warning("Hourly download attempt %d returned empty data", attempt + 1)
+        except Exception as e:
+            log.warning("Hourly download attempt %d failed: %s", attempt + 1, e)
+            data = None
+        if attempt < 2:
+            time.sleep(5 * (attempt + 1))
+
     if data is None or data.empty:
+        log.warning("All hourly download attempts failed; falling back to daily only")
         return pd.DataFrame()
+
     if isinstance(data.columns, pd.MultiIndex):
         level0 = data.columns.get_level_values(0)
         field = "Adj Close" if "Adj Close" in level0 else "Close"
@@ -149,6 +176,10 @@ def _build_hourly_prices(window_days: int) -> pd.DataFrame:
     else:
         data.index = data.index.tz_convert("UTC")
     data = data.dropna(how="all")
+    log.info("Hourly data: %d rows, %d tickers, range %s to %s",
+             len(data), len(data.columns),
+             data.index.min().isoformat() if len(data) else "N/A",
+             data.index.max().isoformat() if len(data) else "N/A")
     _cache.update({"hourly_built_at": now, "hourly": data})
     return data
 
@@ -186,7 +217,9 @@ def run_backtest(
 
     try:
         hourly = _build_hourly_prices(hourly_window_days)
-    except Exception:
+    except Exception as e:
+        import logging
+        logging.getLogger("strategy").warning("Hourly price build failed: %s", e)
         hourly = pd.DataFrame()
 
     rows_by_date: Dict[object, list] = {}

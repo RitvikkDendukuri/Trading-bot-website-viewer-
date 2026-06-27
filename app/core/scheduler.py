@@ -8,7 +8,7 @@ import threading
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from app.core import db, paper, registry
+from app.core import db, paper, registry, ws
 
 log = logging.getLogger("scheduler")
 
@@ -172,6 +172,7 @@ def tick_all() -> None:
             paper.tick(bot_id)
         except Exception as e:
             log.warning("Paper tick failed for %s: %s", bot_id, e)
+    ws.notify("tick")
 
 
 def maybe_compact() -> None:
@@ -207,16 +208,18 @@ def _seed_loop() -> None:
 
 
 def _deferred_refresh() -> None:
-    # wait for seed to load and site to become responsive, then fill gaps in background
-    _stop.wait(60)
+    # wait for seed/daily downloads to finish and Yahoo rate limits to cool down
+    _stop.wait(90)
     if _stop.is_set():
         return
+    log.info("Starting deferred refresh for hourly data...")
     for bot_id in registry.bot_ids():
         if db.has_backtest(bot_id):
             try:
                 _refresh_recent(bot_id)
             except Exception as e:
                 log.warning("Deferred refresh failed for %s: %s", bot_id, e)
+    log.info("Deferred refresh complete.")
 
 
 def start() -> None:

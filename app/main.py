@@ -1,29 +1,30 @@
-# FastAPI app — JSON API + static dashboard
+# FastAPI app — JSON API + WebSocket push + static dashboard
 from __future__ import annotations
 
+import asyncio
 import json
+from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from app.core import db, registry, scheduler, stats
+from app.core import db, registry, scheduler, stats, ws
 
 STATIC_DIR = Path(__file__).resolve().parents[1] / "static"
 
-app = FastAPI(title="Trading Bots Platform")
 
-
-@app.on_event("startup")
-def _startup() -> None:
+@asynccontextmanager
+async def lifespan(application: FastAPI):
     db.init_db()
+    ws.set_loop(asyncio.get_running_loop())
     scheduler.start()
-
-
-@app.on_event("shutdown")
-def _shutdown() -> None:
+    yield
     scheduler.stop()
+
+
+app = FastAPI(title="Trading Bots Platform", lifespan=lifespan)
 
 
 def _bot_summary(bot_id: str) -> dict:
@@ -65,13 +66,56 @@ def bot_equity(bot_id: str) -> dict:
         raise HTTPException(404, "Unknown bot")
     series = db.get_equity_series(bot_id)
     last_live = db.last_live_ts(bot_id)
-    # minute resolution for today, hourly for older dates
     return {
         "strategy": stats.hourly_except_latest(series["strategy"]),
         "spy": stats.hourly_except_latest(series["spy"]),
         "live_start_ts": last_live,
         "benchmark": registry.get_metadata(bot_id).get("benchmark"),
     }
+
+
+@app.get("/api/bots/{bot_id}/drawdown")
+def bot_drawdown(bot_id: str) -> dict:
+    if bot_id not in registry.bot_ids():
+        raise HTTPException(404, "Unknown bot")
+    series = db.get_equity_series(bot_id)
+    strat_dd = _compute_drawdown(series["strategy"])
+    spy_dd = _compute_drawdown(series["spy"])
+    return {"strategy": strat_dd, "spy": spy_dd}
+
+
+def _compute_drawdown(points: list[dict]) -> list[dict]:
+    if not points:
+        return []
+    peak = points[0]["value"]
+    out = []
+    for p in points:
+        v = p["value"]
+        if v > peak:
+            peak = v
+        dd = (v / peak - 1.0) if peak > 0 else 0.0
+        out.append({"ts": p["ts"], "value": round(dd, 6)})
+    return stats.hourly_except_latest(out)
+
+
+@app.get("/api/bots/{bot_id}/trades")
+def bot_trades(bot_id: str, limit: int = 60, offset: int = 0, month: str = "") -> dict:
+    if bot_id not in registry.bot_ids():
+        raise HTTPException(404, "Unknown bot")
+    rows = db.get_trade_history(bot_id, 500, 0)
+    if month:
+        rows = [r for r in rows if r["date"][:7] == month]
+    total = len(rows)
+    rows = rows[offset:offset + limit]
+    has_more = (offset + limit) < total
+    return {"trades": rows, "has_more": has_more, "offset": offset, "total": total}
+
+
+@app.get("/api/bots/{bot_id}/trades/months")
+def bot_trade_months(bot_id: str) -> dict:
+    if bot_id not in registry.bot_ids():
+        raise HTTPException(404, "Unknown bot")
+    return {"months": db.get_trade_months(bot_id)}
 
 
 @app.get("/api/bots/{bot_id}/day/{date}")
@@ -85,10 +129,7 @@ def bot_day_detail(bot_id: str, date: str) -> dict:
     sectors = data.get("sectors", [])
     cur_syms = {s["symbol"] for s in sectors}
 
-    # Find previous day's allocation to detect sells
     from datetime import datetime as _dt, timedelta as _td
-    prev_date = (_dt.strptime(date, "%Y-%m-%d") - _td(days=1)).strftime("%Y-%m-%d")
-    # Search backwards up to 5 days for the most recent prior allocation
     prev_sectors = {}
     for delta in range(1, 6):
         pd_str = (_dt.strptime(date, "%Y-%m-%d") - _td(days=delta)).strftime("%Y-%m-%d")
@@ -119,7 +160,6 @@ def bot_day_detail(bot_id: str, date: str) -> dict:
             "day_return": s.get("day_return", 0),
             "contribution": s.get("contribution", 0),
         })
-    # Add sold positions (were in prev day, not in today)
     for sym, ps in prev_sectors.items():
         if sym not in cur_syms and ps.get("weight", 0) > 0.001:
             trades.append({
@@ -146,6 +186,17 @@ def health() -> dict:
     return {"status": "ok", "bots": registry.bot_ids()}
 
 
+# ---- WebSocket push ----
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    await ws.connect(websocket)
+    try:
+        while True:
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        ws.disconnect(websocket)
+
+
 # ---- static dashboard ----
 @app.get("/")
 def index() -> FileResponse:
@@ -155,6 +206,11 @@ def index() -> FileResponse:
 @app.get("/bot/{bot_id}")
 def bot_page(bot_id: str) -> FileResponse:
     return FileResponse(STATIC_DIR / "bot.html")
+
+
+@app.get("/bot/{bot_id}/trades")
+def trades_page(bot_id: str) -> FileResponse:
+    return FileResponse(STATIC_DIR / "trades.html")
 
 
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")

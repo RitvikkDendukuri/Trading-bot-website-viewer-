@@ -1,27 +1,34 @@
-// Bot detail page: stats bar, equity chart (strategy vs SPY, live segment dashed),
-// positions, methodology. Refreshes every 60s.
+// Bot detail page: stats, equity chart, drawdown chart, positions, methodology.
+// Refreshes via WebSocket push, falls back to 120s polling.
 
-const botId = location.pathname.split("/").pop();
-let chart = null;
+var botId = location.pathname.split("/").pop();
+var chart = null;
+var ddChart = null;
 
 function pct(x) { return (x === null || x === undefined) ? "—" : (x * 100).toFixed(2) + "%"; }
 function money(x) { return (x === null || x === undefined) ? "—" : "$" + Number(x).toLocaleString(undefined, { maximumFractionDigits: 0 }); }
 function num(x) { return (x === null || x === undefined) ? "—" : Number(x).toFixed(2); }
 function cls(x) { return (x === null || x === undefined) ? "" : (x >= 0 ? "pos" : "neg"); }
 
-function statItem(label, value, klass = "") {
-  return `<div class="stat"><div class="label">${label}</div><div class="value ${klass}">${value}</div></div>`;
+function statItem(label, value, klass) {
+  klass = klass || "";
+  return '<div class="stat"><div class="label">' + label + '</div><div class="value ' + klass + '">' + value + '</div></div>';
 }
 
+function isDark() { return document.documentElement.getAttribute("data-theme") === "dark"; }
+function gridColor() { return isDark() ? "#2e2a24" : "#ddd5c4"; }
+function tickColor() { return isDark() ? "#9a9082" : "#5c554a"; }
+
 async function loadDetail() {
-  const res = await fetch(`/api/bots/${botId}`);
+  var res = await fetch("/api/bots/" + botId);
   if (!res.ok) { document.getElementById("bot-name").textContent = "Bot not found"; return; }
-  const bot = await res.json();
-  const m = bot.metrics.strategy, spy = bot.metrics.spy, excess = bot.metrics.excess_return_vs_spy;
+  var bot = await res.json();
+  var m = bot.metrics.strategy, spy = bot.metrics.spy, excess = bot.metrics.excess_return_vs_spy;
 
   document.getElementById("bot-name").textContent = bot.name;
   document.title = bot.name + " — Dashboard";
   document.getElementById("gh-link").href = bot.github_url || "#";
+  document.getElementById("trades-link").href = "/bot/" + botId + "/trades";
   document.getElementById("live-badge").innerHTML = bot.live
     ? '<span class="badge live">LIVE</span>'
     : '<span class="badge idle">seed</span>';
@@ -35,52 +42,46 @@ async function loadDetail() {
     statItem("Sharpe", num(m.sharpe)),
     statItem("Sortino", num(m.sortino)),
     statItem("Max DD", pct(m.max_drawdown), "neg"),
-    statItem("Regime", `<span style="color:var(--accent)">${bot.regime || "—"}</span>`),
+    statItem("Regime", '<span style="color:var(--accent)">' + (bot.regime || "—") + '</span>'),
   ].join("");
 
-  // positions table — each row shows today's move (color + arrow + % and $)
   function dayChange(p) {
-    const cp = p.change_pct, ca = p.change_amt;
+    var cp = p.change_pct, ca = p.change_amt;
     if (cp === null || cp === undefined) return '<td class="muted">—</td>';
-    const up = cp >= 0;
-    const arrow = up ? "▲" : "▼";
-    const cls = up ? "pos" : "neg";
-    const amt = (ca >= 0 ? "+" : "−") + "$" + Math.abs(ca).toLocaleString(undefined, { maximumFractionDigits: 0 });
-    return `<td class="chg ${cls}">${arrow} ${(cp * 100).toFixed(2)}% <span class="chg-amt">${amt}</span></td>`;
+    var up = cp >= 0;
+    var arrow = up ? "▲" : "▼";
+    var c = up ? "pos" : "neg";
+    var amt = (ca >= 0 ? "+" : "−") + "$" + Math.abs(ca).toLocaleString(undefined, { maximumFractionDigits: 0 });
+    return '<td class="chg ' + c + '">' + arrow + ' ' + (cp * 100).toFixed(2) + '% <span class="chg-amt">' + amt + '</span></td>';
   }
-  const tbody = bot.positions && bot.positions.length
-    ? bot.positions.map(p => `<tr>
-        <td>${p.symbol}</td>
-        <td>${Number(p.qty).toLocaleString(undefined,{maximumFractionDigits:2})}</td>
-        <td>${money(p.market_value)}</td>
-        <td>${pct(p.weight)}</td>
-        ${dayChange(p)}</tr>`).join("")
+  var tbody = bot.positions && bot.positions.length
+    ? bot.positions.map(function (p) {
+        return '<tr><td>' + p.symbol + '</td><td>' + Number(p.qty).toLocaleString(undefined, {maximumFractionDigits:2}) + '</td><td>' + money(p.market_value) + '</td><td>' + pct(p.weight) + '</td>' + dayChange(p) + '</tr>';
+      }).join("")
     : '<tr><td class="muted">No live positions yet.</td></tr>';
   document.getElementById("positions").innerHTML =
-    `<thead><tr><th>Symbol</th><th>Qty</th><th>Market Value</th><th>Weight</th><th>Day Change</th></tr></thead><tbody>${tbody}</tbody>`;
+    '<thead><tr><th>Symbol</th><th>Qty</th><th>Market Value</th><th>Weight</th><th>Day Change</th></tr></thead><tbody>' + tbody + '</tbody>';
 
-  // ---- Risk & Benchmark metrics (under positions) ----
-  const sp = bot.metrics.spy;
-  // metric(label, info, value, spyValue, good) — good: true=green, false=red, null=neutral
+  var sp = bot.metrics.spy;
   function metric(label, info, valueStr, spyStr, good) {
-    const cls = good === true ? "pos" : good === false ? "neg" : "";
-    const cmp = spyStr != null ? `<div class="cmp">SPY ${spyStr}</div>` : "";
-    const ic = info ? `<span class="info" tabindex="0" data-tip="${info}">i</span>` : "";
-    return `<div class="stat"><div class="label">${label} ${ic}</div><div class="value ${cls}">${valueStr}</div>${cmp}</div>`;
+    var c = good === true ? "pos" : good === false ? "neg" : "";
+    var cmp = spyStr != null ? '<div class="cmp">SPY ' + spyStr + '</div>' : "";
+    var ic = info ? '<span class="info" tabindex="0" data-tip="' + info + '">i</span>' : "";
+    return '<div class="stat"><div class="label">' + label + ' ' + ic + '</div><div class="value ' + c + '">' + valueStr + '</div>' + cmp + '</div>';
   }
-  const better = (a, b) => (a == null || b == null) ? null : a >= b;
+  var better = function (a, b) { return (a == null || b == null) ? null : a >= b; };
   document.getElementById("metricbar").innerHTML = [
-    metric("Beta", "Sensitivity to SPY moves. 1 = moves with the market, &lt;1 = less, &gt;1 = more. Formula: cov(bot, SPY) ÷ var(SPY) on daily returns.",
+    metric("Beta", "Sensitivity to SPY moves. 1 = moves with the market, &lt;1 = less, &gt;1 = more.",
       num(m.beta), null, null),
-    metric("Alpha", "Annualized return beyond what SPY exposure (beta) explains. Formula: (bot − beta×SPY) daily mean × 252. Positive = adds value.",
+    metric("Alpha", "Annualized return beyond what SPY exposure (beta) explains. Positive = adds value.",
       pct(m.alpha), null, m.alpha != null ? m.alpha >= 0 : null),
-    metric("Calmar", "Return per unit of worst loss. Formula: CAGR ÷ |max drawdown|. Higher is better.",
+    metric("Calmar", "Return per unit of worst loss. CAGR / |max drawdown|. Higher is better.",
       num(m.calmar), num(sp.calmar), better(m.calmar, sp.calmar)),
-    metric("Sharpe", "Risk-adjusted return: annualized mean daily return ÷ annualized volatility.",
+    metric("Sharpe", "Risk-adjusted return: annualized mean daily return / annualized volatility.",
       num(m.sharpe), num(sp.sharpe), better(m.sharpe, sp.sharpe)),
     metric("Sortino", "Like Sharpe but only penalizes downside volatility.",
       num(m.sortino), num(sp.sortino), better(m.sortino, sp.sortino)),
-    metric("Max Drawdown", "Largest peak-to-trough drop in equity. Smaller (closer to 0) is better.",
+    metric("Max Drawdown", "Largest peak-to-trough drop in equity. Closer to 0 is better.",
       pct(m.max_drawdown), pct(sp.max_drawdown), better(m.max_drawdown, sp.max_drawdown)),
     metric("Total Return", "Total % change in equity over the period.",
       pct(m.total_return), pct(sp.total_return), better(m.total_return, sp.total_return)),
@@ -89,22 +90,24 @@ async function loadDetail() {
   ].join("");
 }
 
+// ---- equity chart ----
+
 function buildSeries(points) {
-  const data = points.map((p) => ({ x: p.ts, y: p.value }));
-  let liveStart = points.findIndex((p) => p.source === "live");
+  var data = points.map(function (p) { return { x: p.ts, y: p.value }; });
+  var liveStart = points.findIndex(function (p) { return p.source === "live"; });
   if (liveStart < 0) liveStart = points.length;
-  return { data, liveStart };
+  return { data: data, liveStart: liveStart };
 }
 
-let chartData = { strategy: [], spy: [] };   // full series, filtered per range
-let currentRange = "YTD";
-let focusBot = false;   // when true, hide SPY so the y-axis zooms into the bot
+var chartData = { strategy: [], spy: [] };
+var currentRange = "YTD";
+var focusBot = false;
 
 function rangeCutoff(range, points) {
   if (!points.length) return null;
-  const lastTs = points[points.length - 1].ts;
-  const last = new Date(lastTs);
-  const d = new Date(last);
+  var lastTs = points[points.length - 1].ts;
+  var last = new Date(lastTs);
+  var d = new Date(last);
   switch (range) {
     case "1D": d.setDate(d.getDate() - 1); break;
     case "1W": d.setDate(d.getDate() - 7); break;
@@ -119,25 +122,38 @@ function rangeCutoff(range, points) {
 
 function filterRange(points, cutoff) {
   if (!cutoff) return points;
-  return points.filter((p) => new Date(p.ts) >= cutoff);
+  return points.filter(function (p) { return new Date(p.ts) >= cutoff; });
+}
+
+function chartColors() {
+  return {
+    accent: isDark() ? "#ff6a2f" : "#ff4d00",
+    spyc: isDark() ? "#e8e2d6" : "#16130f",
+    tooltip: isDark() ? "#e8e2d6" : "#16130f",
+    tooltipBorder: isDark() ? "#ff6a2f" : "#ff4d00",
+  };
 }
 
 function renderChart() {
-  const cutoff = rangeCutoff(currentRange, chartData.strategy);
-  const strat = buildSeries(filterRange(chartData.strategy, cutoff));
-  const spy = buildSeries(filterRange(chartData.spy, cutoff));
+  var cutoff = rangeCutoff(currentRange, chartData.strategy);
+  var strat = buildSeries(filterRange(chartData.strategy, cutoff));
+  var spy = buildSeries(filterRange(chartData.spy, cutoff));
+  var c = chartColors();
 
-  const accent = "#ff4d00", spyc = "#16130f";
-  // dash only the live portion (segments at/after liveStart)
-  const dashLive = (s) => (ctx) =>
-    ctx.p0DataIndex >= s.liveStart - 1 ? [4, 3] : undefined;
-  const datasets = [
-    { label: "Strategy", data: strat.data, borderColor: accent, backgroundColor: "transparent", borderWidth: 2.5, pointRadius: 0, tension: 0.1, segment: { borderDash: dashLive(strat) } },
-    { label: "SPY", data: spy.data, borderColor: spyc, backgroundColor: "transparent", borderWidth: 1.5, pointRadius: 0, tension: 0.1, hidden: focusBot, segment: { borderDash: dashLive(spy) } },
+  var dashLive = function (s) { return function (ctx) {
+    return ctx.p0DataIndex >= s.liveStart - 1 ? [4, 3] : undefined;
+  }; };
+  var datasets = [
+    { label: "Strategy", data: strat.data, borderColor: c.accent, backgroundColor: "transparent", borderWidth: 2.5, pointRadius: 0, tension: 0.1, segment: { borderDash: dashLive(strat) } },
+    { label: "SPY", data: spy.data, borderColor: c.spyc, backgroundColor: "transparent", borderWidth: 1.5, pointRadius: 0, tension: 0.1, hidden: focusBot, segment: { borderDash: dashLive(spy) } },
   ];
 
   if (chart) {
     chart.data.datasets = datasets;
+    chart.options.scales.x.grid.color = gridColor();
+    chart.options.scales.y.grid.color = gridColor();
+    chart.options.scales.x.ticks.color = tickColor();
+    chart.options.scales.y.ticks.color = tickColor();
     if (chart.resetZoom) chart.resetZoom("none");
     chart.update("none");
     return;
@@ -145,7 +161,7 @@ function renderChart() {
 
   chart = new Chart(document.getElementById("chart"), {
     type: "line",
-    data: { datasets },
+    data: { datasets: datasets },
     options: {
       responsive: true,
       maintainAspectRatio: false,
@@ -153,131 +169,205 @@ function renderChart() {
       plugins: {
         legend: { display: false },
         tooltip: {
-          backgroundColor: "#16130f",
-          borderColor: "#ff4d00",
-          borderWidth: 2,
-          cornerRadius: 0,
-          padding: 10,
+          backgroundColor: c.tooltip,
+          borderColor: c.tooltipBorder,
+          borderWidth: 2, cornerRadius: 0, padding: 10,
           titleFont: { family: "JetBrains Mono", weight: "700" },
           bodyFont: { family: "JetBrains Mono" },
           callbacks: {
-            label: (c) => `${c.dataset.label}: $${Number(c.parsed.y).toLocaleString(undefined, { maximumFractionDigits: 0 })}`,
+            label: function (ctx) { return ctx.dataset.label + ": $" + Number(ctx.parsed.y).toLocaleString(undefined, { maximumFractionDigits: 0 }); },
           },
         },
         zoom: {
-          // zoom into a single day to see minute detail, zoom out for daily history
           zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: "x" },
           pan: { enabled: true, mode: "x" },
         },
       },
       scales: {
-        // no fixed unit: Chart.js auto-picks day/month when zoomed out, hours/minutes when zoomed in
-        x: { type: "time", adapters: { date: { zone: "America/New_York" } }, grid: { color: "#ddd5c4" }, ticks: { color: "#5c554a", maxRotation: 0, autoSkip: true, font: { family: "JetBrains Mono" } } },
-        y: { grid: { color: "#ddd5c4" }, ticks: { color: "#5c554a", font: { family: "JetBrains Mono" }, callback: (v) => "$" + (v / 1000) + "k" } },
+        x: { type: "time", adapters: { date: { zone: "America/New_York" } }, grid: { color: gridColor() }, ticks: { color: tickColor(), maxRotation: 0, autoSkip: true, font: { family: "JetBrains Mono" } } },
+        y: { grid: { color: gridColor() }, ticks: { color: tickColor(), font: { family: "JetBrains Mono" }, callback: function (v) { return "$" + (v / 1000) + "k"; } } },
       },
     },
   });
 }
 
+// ---- drawdown chart ----
+
+var ddData = { strategy: [], spy: [] };
+
+function renderDDChart() {
+  var cutoff = rangeCutoff(currentRange, chartData.strategy);
+  var stratPts = filterRange(ddData.strategy, cutoff).map(function (p) { return { x: p.ts, y: p.value * 100 }; });
+  var spyPts = filterRange(ddData.spy, cutoff).map(function (p) { return { x: p.ts, y: p.value * 100 }; });
+  var c = chartColors();
+
+  var datasets = [
+    { label: "Strategy DD", data: stratPts, borderColor: c.accent, backgroundColor: c.accent + "1a", fill: true, borderWidth: 1.5, pointRadius: 0, tension: 0.1 },
+    { label: "SPY DD", data: spyPts, borderColor: c.spyc, backgroundColor: "transparent", fill: false, borderWidth: 1, pointRadius: 0, tension: 0.1, hidden: focusBot },
+  ];
+
+  if (ddChart) {
+    ddChart.data.datasets = datasets;
+    ddChart.options.scales.x.grid.color = gridColor();
+    ddChart.options.scales.y.grid.color = gridColor();
+    ddChart.options.scales.x.ticks.color = tickColor();
+    ddChart.options.scales.y.ticks.color = tickColor();
+    ddChart.update("none");
+    return;
+  }
+
+  ddChart = new Chart(document.getElementById("dd-chart"), {
+    type: "line",
+    data: { datasets: datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: "index", intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: c.tooltip,
+          borderColor: c.tooltipBorder,
+          borderWidth: 2, cornerRadius: 0, padding: 10,
+          titleFont: { family: "JetBrains Mono", weight: "700" },
+          bodyFont: { family: "JetBrains Mono" },
+          callbacks: {
+            label: function (ctx) { return ctx.dataset.label + ": " + ctx.parsed.y.toFixed(2) + "%"; },
+          },
+        },
+      },
+      scales: {
+        x: { type: "time", adapters: { date: { zone: "America/New_York" } }, grid: { color: gridColor() }, ticks: { color: tickColor(), maxRotation: 0, autoSkip: true, font: { family: "JetBrains Mono" } } },
+        y: { grid: { color: gridColor() }, ticks: { color: tickColor(), font: { family: "JetBrains Mono" }, callback: function (v) { return v.toFixed(0) + "%"; } } },
+      },
+    },
+  });
+}
+
+// ---- data loading ----
+
 async function loadChart() {
-  const res = await fetch(`/api/bots/${botId}/equity`);
-  const data = await res.json();
-  const sortByTs = (arr) => [...arr].sort((a, b) => (a.ts < b.ts ? -1 : a.ts > b.ts ? 1 : 0));
+  var res = await fetch("/api/bots/" + botId + "/equity");
+  var data = await res.json();
+  var sortByTs = function (arr) { return arr.slice().sort(function (a, b) { return a.ts < b.ts ? -1 : a.ts > b.ts ? 1 : 0; }); };
   chartData = { strategy: sortByTs(data.strategy || []), spy: sortByTs(data.spy || []) };
   renderChart();
 }
 
-async function refresh() {
-  try { await Promise.all([loadDetail(), loadChart()]); } catch (e) { /* keep last view */ }
+async function loadDrawdown() {
+  try {
+    var res = await fetch("/api/bots/" + botId + "/drawdown");
+    var data = await res.json();
+    var sortByTs = function (arr) { return arr.slice().sort(function (a, b) { return a.ts < b.ts ? -1 : a.ts > b.ts ? 1 : 0; }); };
+    ddData = { strategy: sortByTs(data.strategy || []), spy: sortByTs(data.spy || []) };
+    renderDDChart();
+  } catch (e) { /* drawdown chart is optional */ }
 }
 
-// range selector
-document.querySelectorAll("#ranges button").forEach((btn) => {
-  btn.addEventListener("click", () => {
+async function refresh() {
+  try { await Promise.all([loadDetail(), loadChart(), loadDrawdown()]); } catch (e) { /* keep last view */ }
+}
+
+// ---- range selector ----
+document.querySelectorAll("#ranges button").forEach(function (btn) {
+  btn.addEventListener("click", function () {
     currentRange = btn.dataset.range;
-    document.querySelectorAll("#ranges button").forEach((b) => b.classList.remove("active"));
+    document.querySelectorAll("#ranges button").forEach(function (b) { b.classList.remove("active"); });
     btn.classList.add("active");
     renderChart();
+    renderDDChart();
   });
 });
 
-// focus toggle: hide SPY so the y-axis auto-scales to just the bot's curve
-document.getElementById("focus-toggle").addEventListener("click", (e) => {
+// ---- focus toggle ----
+document.getElementById("focus-toggle").addEventListener("click", function (e) {
   focusBot = !focusBot;
   e.currentTarget.classList.toggle("active", focusBot);
   e.currentTarget.textContent = focusBot ? "◉ Focus: Bot" : "◎ Focus: Bot";
   renderChart();
+  renderDDChart();
 });
 
-document.getElementById("reset-zoom").addEventListener("click", (e) => {
+document.getElementById("reset-zoom").addEventListener("click", function (e) {
   e.preventDefault();
   if (chart) chart.resetZoom();
 });
 
-// ---- day detail panel: click on chart to see trades for that day ----
+// ---- theme change: update chart colors ----
+window.onThemeChange = function () {
+  if (chart) {
+    chart.destroy();
+    chart = null;
+    renderChart();
+  }
+  if (ddChart) {
+    ddChart.destroy();
+    ddChart = null;
+    renderDDChart();
+  }
+};
+
+// ---- day detail panel ----
 async function showDayDetail(dateStr) {
-  const panel = document.getElementById("day-detail-panel");
-  const content = document.getElementById("day-detail-content");
-  const title = document.getElementById("day-detail-title");
+  var panel = document.getElementById("day-detail-panel");
+  var content = document.getElementById("day-detail-content");
+  var title = document.getElementById("day-detail-title");
   try {
-    const res = await fetch(`/api/bots/${botId}/day/${dateStr}`);
-    if (!res.ok) {
-      panel.style.display = "none";
-      return;
-    }
-    const d = await res.json();
-    const up = d.portfolio_return >= 0;
-    title.textContent = `Trade Detail — ${d.date}`;
+    var res = await fetch("/api/bots/" + botId + "/day/" + dateStr);
+    if (!res.ok) { panel.style.display = "none"; return; }
+    var d = await res.json();
+    title.textContent = "Trade Detail — " + d.date;
 
-    const summaryHTML = `<div class="day-summary">
-      ${statItem("Equity", money(d.equity))}
-      ${statItem("Day Return", pct(d.portfolio_return), cls(d.portfolio_return))}
-      ${statItem("Leverage", num(d.leverage) + "×")}
-      ${statItem("Regime", `<span style="color:var(--accent)">${d.regime || "—"}</span>`)}
-    </div>`;
+    var summaryHTML = '<div class="day-summary">' +
+      statItem("Equity", money(d.equity)) +
+      statItem("Day Return", pct(d.portfolio_return), cls(d.portfolio_return)) +
+      statItem("Leverage", num(d.leverage) + "×") +
+      statItem("Regime", '<span style="color:var(--accent)">' + (d.regime || "—") + '</span>') +
+    '</div>';
 
-    const tradeRows = d.trades.map(t => {
-      const retCls = t.day_return >= 0 ? "pos" : "neg";
-      const contrCls = t.contribution >= 0 ? "pos" : "neg";
-      const arrow = t.day_return >= 0 ? "▲" : "▼";
-      const wBar = `<span class="weight-bar" style="width:${Math.round(t.weight * 200)}px"></span>`;
-      const prevW = t.prev_weight > 0 ? `<span class="muted" style="font-size:11px">← ${(t.prev_weight*100).toFixed(1)}%</span>` : "";
-      return `<tr>
-        <td><span class="trade-action ${t.action}">${t.action}</span></td>
-        <td style="font-weight:700">${t.symbol}</td>
-        <td>${(t.weight*100).toFixed(1)}% ${wBar} ${prevW}</td>
-        <td class="chg ${retCls}">${arrow} ${(t.day_return*100).toFixed(2)}%</td>
-        <td class="chg ${contrCls}">${t.contribution >= 0 ? "+" : ""}${(t.contribution*100).toFixed(2)}%</td>
-      </tr>`;
+    var tradeRows = d.trades.map(function (t) {
+      var retCls = t.day_return >= 0 ? "pos" : "neg";
+      var contrCls = t.contribution >= 0 ? "pos" : "neg";
+      var arrow = t.day_return >= 0 ? "▲" : "▼";
+      var wBar = '<span class="weight-bar" style="width:' + Math.round(t.weight * 200) + 'px"></span>';
+      var prevW = t.prev_weight > 0 ? '<span class="muted" style="font-size:11px">← ' + (t.prev_weight*100).toFixed(1) + '%</span>' : "";
+      return '<tr>' +
+        '<td><span class="trade-action ' + t.action + '">' + t.action + '</span></td>' +
+        '<td style="font-weight:700">' + t.symbol + '</td>' +
+        '<td>' + (t.weight*100).toFixed(1) + '% ' + wBar + ' ' + prevW + '</td>' +
+        '<td class="chg ' + retCls + '">' + arrow + ' ' + (t.day_return*100).toFixed(2) + '%</td>' +
+        '<td class="chg ' + contrCls + '">' + (t.contribution >= 0 ? "+" : "") + (t.contribution*100).toFixed(2) + '%</td>' +
+      '</tr>';
     }).join("");
 
-    content.innerHTML = summaryHTML + `<table>
-      <thead><tr><th>Action</th><th>Symbol</th><th>Weight</th><th>Day Return</th><th>Contribution</th></tr></thead>
-      <tbody>${tradeRows || '<tr><td class="muted" colspan="5">No positions this day.</td></tr>'}</tbody>
-    </table>`;
+    content.innerHTML = summaryHTML + '<table>' +
+      '<thead><tr><th>Action</th><th>Symbol</th><th>Weight</th><th>Day Return</th><th>Contribution</th></tr></thead>' +
+      '<tbody>' + (tradeRows || '<tr><td class="muted" colspan="5">No positions this day.</td></tr>') + '</tbody>' +
+    '</table>';
     panel.style.display = "";
     panel.scrollIntoView({ behavior: "smooth", block: "nearest" });
-  } catch (e) {
-    panel.style.display = "none";
-  }
+  } catch (e) { panel.style.display = "none"; }
 }
 
-// Hook into chart click
 function setupChartClick() {
-  const canvas = document.getElementById("chart");
-  canvas.addEventListener("click", (evt) => {
+  document.getElementById("chart").addEventListener("click", function (evt) {
     if (!chart) return;
-    const points = chart.getElementsAtEventForMode(evt, "index", { intersect: false }, false);
+    var points = chart.getElementsAtEventForMode(evt, "index", { intersect: false }, false);
     if (!points.length) return;
-    const idx = points[0].index;
-    const ds = chart.data.datasets[0];
+    var idx = points[0].index;
+    var ds = chart.data.datasets[0];
     if (!ds || !ds.data[idx]) return;
-    const ts = ds.data[idx].x;
-    const dateStr = ts.substring(0, 10);
-    showDayDetail(dateStr);
+    var ts = ds.data[idx].x;
+    showDayDetail(ts.substring(0, 10));
   });
 }
 
+// ---- WebSocket: refresh on server tick ----
+window.onWsMessage = function (msg) {
+  if (msg.type === "tick") refresh();
+};
+
 refresh();
 setupChartClick();
-setInterval(refresh, 60000);
+// fallback polling
+setInterval(refresh, 120000);
