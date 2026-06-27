@@ -196,7 +196,10 @@ function renderChart() {
 var ddData = { strategy: [], spy: [] };
 
 function renderDDChart() {
-  var cutoff = rangeCutoff(currentRange, chartData.strategy);
+  if (!ddData.strategy.length && !ddData.spy.length) return;
+  var canvas = document.getElementById("dd-chart");
+  if (!canvas) return;
+  var cutoff = rangeCutoff(currentRange, chartData.strategy.length ? chartData.strategy : ddData.strategy);
   var stratPts = filterRange(ddData.strategy, cutoff).map(function (p) { return { x: p.ts, y: p.value * 100 }; });
   var spyPts = filterRange(ddData.spy, cutoff).map(function (p) { return { x: p.ts, y: p.value * 100 }; });
   var c = chartColors();
@@ -265,7 +268,10 @@ async function loadDrawdown() {
 }
 
 async function refresh() {
-  try { await Promise.all([loadDetail(), loadChart(), loadDrawdown()]); } catch (e) { /* keep last view */ }
+  try {
+    await Promise.all([loadDetail(), loadChart()]);
+    await loadDrawdown();
+  } catch (e) { /* keep last view */ }
 }
 
 // ---- range selector ----
