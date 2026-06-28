@@ -126,11 +126,13 @@ function filterRange(points, cutoff) {
 }
 
 function chartColors() {
+  var dark = isDark();
   return {
-    accent: isDark() ? "#ff6a2f" : "#ff4d00",
-    spyc: isDark() ? "#e8e2d6" : "#16130f",
-    tooltip: isDark() ? "#e8e2d6" : "#16130f",
-    tooltipBorder: isDark() ? "#ff6a2f" : "#ff4d00",
+    accent: dark ? "#ff6a2f" : "#ff4d00",
+    spyc: dark ? "#e8e2d6" : "#16130f",
+    tooltipBg: dark ? "#2e2a24" : "#16130f",
+    tooltipText: dark ? "#e8e2d6" : "#fffdf7",
+    tooltipBorder: dark ? "#ff6a2f" : "#ff4d00",
   };
 }
 
@@ -169,7 +171,7 @@ function renderChart() {
       plugins: {
         legend: { display: false },
         tooltip: {
-          backgroundColor: c.tooltip,
+          backgroundColor: c.tooltipBg, titleColor: c.tooltipText, bodyColor: c.tooltipText,
           borderColor: c.tooltipBorder,
           borderWidth: 2, cornerRadius: 0, padding: 10,
           titleFont: { family: "JetBrains Mono", weight: "700" },
@@ -229,7 +231,7 @@ function renderDDChart() {
       plugins: {
         legend: { display: false },
         tooltip: {
-          backgroundColor: c.tooltip,
+          backgroundColor: c.tooltipBg, titleColor: c.tooltipText, bodyColor: c.tooltipText,
           borderColor: c.tooltipBorder,
           borderWidth: 2, cornerRadius: 0, padding: 10,
           titleFont: { family: "JetBrains Mono", weight: "700" },
