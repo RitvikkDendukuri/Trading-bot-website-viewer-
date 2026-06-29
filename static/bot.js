@@ -10,16 +10,74 @@ function money(x) { return (x === null || x === undefined) ? "—" : "$" + Numbe
 function num(x) { return (x === null || x === undefined) ? "—" : Number(x).toFixed(2); }
 function cls(x) { return (x === null || x === undefined) ? "" : (x >= 0 ? "pos" : "neg"); }
 
-function statItem(label, value, klass) {
+function statItem(label, value, klass, field) {
   klass = klass || "";
-  return '<div class="stat"><div class="label">' + label + '</div><div class="value ' + klass + '">' + value + '</div></div>';
+  var attr = field ? ' data-field="' + field + '"' : "";
+  return '<div class="stat"' + attr + '><div class="label">' + label + '</div><div class="value ' + klass + '">' + value + '</div></div>';
 }
 
 function isDark() { return document.documentElement.getAttribute("data-theme") === "dark"; }
 function gridColor() { return isDark() ? "#2e2a24" : "#ddd5c4"; }
 function tickColor() { return isDark() ? "#9a9082" : "#5c554a"; }
 
+// ---- toast notifications (shared look with landing page) ----
+function ensureToastContainer() {
+  var c = document.getElementById("toast-container");
+  if (!c) {
+    c = document.createElement("div");
+    c.id = "toast-container";
+    c.className = "toast-container";
+    document.body.appendChild(c);
+  }
+  return c;
+}
+function toast(message, icon) {
+  var c = ensureToastContainer();
+  var el = document.createElement("div");
+  el.className = "toast";
+  el.innerHTML = '<span class="toast-icon">' + (icon || "●") + '</span><span>' + message + '</span>';
+  c.appendChild(el);
+  setTimeout(function () {
+    el.classList.add("out");
+    setTimeout(function () { el.remove(); }, 320);
+  }, 2600);
+}
+
+function showRefreshIndicator() {
+  var el = document.getElementById("refresh-indicator");
+  if (!el) return;
+  el.classList.add("active");
+  clearTimeout(el._hideTimer);
+  el._hideTimer = setTimeout(function () { el.classList.remove("active"); }, 1200);
+}
+
+function flashStatValue(field) {
+  var sel = document.querySelector('.stat[data-field="' + field + '"] .value');
+  if (sel) {
+    sel.classList.remove("value-flash");
+    void sel.offsetWidth;
+    sel.classList.add("value-flash");
+  }
+}
+
+var _prevEquity = null;
+var _prevRegime = null;
+var _firstDetailLoad = true;
+
+function skeletonStatbar(n) {
+  var out = "";
+  for (var i = 0; i < n; i++) {
+    out += '<div class="stat"><div class="skeleton skeleton-line" style="width:50%;height:10px;margin-bottom:8px"></div><div class="skeleton" style="height:18px"></div></div>';
+  }
+  return out;
+}
+
 async function loadDetail() {
+  if (_firstDetailLoad) {
+    document.getElementById("statbar").innerHTML = skeletonStatbar(8);
+    document.getElementById("positions").innerHTML =
+      '<tbody><tr><td colspan="5" style="padding:0"><div class="skeleton" style="height:80px;margin:8px 0"></div></td></tr></tbody>';
+  }
   var res = await fetch("/api/bots/" + botId);
   if (!res.ok) { document.getElementById("bot-name").textContent = "Bot not found"; return; }
   var bot = await res.json();
@@ -35,15 +93,32 @@ async function loadDetail() {
   document.getElementById("methodology").textContent = bot.methodology || "";
 
   document.getElementById("statbar").innerHTML = [
-    statItem("Equity", money(m.current_equity)),
-    statItem("Total Return", pct(m.total_return), cls(m.total_return)),
-    statItem("vs SPY", pct(excess), cls(excess)),
-    statItem("CAGR", pct(m.cagr), cls(m.cagr)),
-    statItem("Sharpe", num(m.sharpe)),
-    statItem("Sortino", num(m.sortino)),
-    statItem("Max DD", pct(m.max_drawdown), "neg"),
-    statItem("Regime", '<span style="color:var(--accent)">' + (bot.regime || "—") + '</span>'),
+    statItem("Equity", money(m.current_equity), "", "current_equity"),
+    statItem("Total Return", pct(m.total_return), cls(m.total_return), "total_return"),
+    statItem("vs SPY", pct(excess), cls(excess), "excess"),
+    statItem("CAGR", pct(m.cagr), cls(m.cagr), "cagr"),
+    statItem("Sharpe", num(m.sharpe), "", "sharpe"),
+    statItem("Sortino", num(m.sortino), "", "sortino"),
+    statItem("Max DD", pct(m.max_drawdown), "neg", "max_drawdown"),
+    statItem("Regime", '<span style="color:var(--accent)">' + (bot.regime || "—") + '</span>', "", "regime"),
   ].join("");
+
+  // detect & celebrate a new trading day's data arriving
+  if (!_firstDetailLoad) {
+    if (_prevEquity !== null && m.current_equity !== _prevEquity) {
+      flashStatValue("current_equity");
+      flashStatValue("total_return");
+      flashStatValue("excess");
+      showRefreshIndicator();
+    }
+    if (_prevRegime !== null && bot.regime !== _prevRegime) {
+      toast("Regime shifted to " + (bot.regime || "—"), "◆");
+      flashStatValue("regime");
+    }
+  }
+  _prevEquity = m.current_equity;
+  _prevRegime = bot.regime;
+  _firstDetailLoad = false;
 
   function dayChange(p) {
     var cp = p.change_pct, ca = p.change_amt;
@@ -353,6 +428,9 @@ async function showDayDetail(dateStr) {
       '<tbody>' + (tradeRows || '<tr><td class="muted" colspan="5">No positions this day.</td></tr>') + '</tbody>' +
     '</table>';
     panel.style.display = "";
+    panel.classList.remove("panel-enter");
+    void panel.offsetWidth;
+    panel.classList.add("panel-enter");
     panel.scrollIntoView({ behavior: "smooth", block: "nearest" });
   } catch (e) { panel.style.display = "none"; }
 }
@@ -371,8 +449,15 @@ function setupChartClick() {
 }
 
 // ---- WebSocket: refresh on server tick ----
+var _wsToastShown = false;
 window.onWsMessage = function (msg) {
-  if (msg.type === "tick") refresh();
+  if (msg.type === "tick") {
+    refresh();
+    if (!_wsToastShown) {
+      toast("Live data connected", "⚡");
+      _wsToastShown = true;
+    }
+  }
 };
 
 refresh();

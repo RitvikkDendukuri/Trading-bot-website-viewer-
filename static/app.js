@@ -1,4 +1,4 @@
-// Landing page: bot cards with sparklines, WebSocket live refresh.
+// Landing page: bot cards with sparklines, animations, WebSocket live refresh.
 
 function pct(x) {
   if (x === null || x === undefined) return "—";
@@ -17,6 +17,49 @@ function cls(x) {
   return x >= 0 ? "pos" : "neg";
 }
 
+// ---- toast notifications ----
+function ensureToastContainer() {
+  var c = document.getElementById("toast-container");
+  if (!c) {
+    c = document.createElement("div");
+    c.id = "toast-container";
+    c.className = "toast-container";
+    document.body.appendChild(c);
+  }
+  return c;
+}
+function toast(message, icon) {
+  var c = ensureToastContainer();
+  var el = document.createElement("div");
+  el.className = "toast";
+  el.innerHTML = '<span class="toast-icon">' + (icon || "●") + '</span><span>' + message + '</span>';
+  c.appendChild(el);
+  setTimeout(function () {
+    el.classList.add("out");
+    setTimeout(function () { el.remove(); }, 320);
+  }, 2600);
+}
+window.appToast = toast;
+
+// ---- skeleton loading ----
+function skeletonCard() {
+  return '<div class="skeleton-card">' +
+    '<div class="skeleton skeleton-line" style="width:60%;height:20px;margin:22px 22px 14px"></div>' +
+    '<div class="skeleton skeleton-line" style="width:85%;margin:0 22px 18px"></div>' +
+    '<div class="skeleton" style="height:40px;margin:0 22px 16px"></div>' +
+    '<div style="display:flex;gap:10px;margin:0 22px">' +
+      '<div class="skeleton skeleton-stat" style="flex:1"></div>' +
+      '<div class="skeleton skeleton-stat" style="flex:1"></div>' +
+      '<div class="skeleton skeleton-stat" style="flex:1"></div>' +
+    '</div>' +
+  '</div>';
+}
+function skeletonGrid(n) {
+  var out = "";
+  for (var i = 0; i < n; i++) out += skeletonCard();
+  return out;
+}
+
 function card(bot) {
   var m = bot.metrics.strategy;
   var excess = bot.metrics.excess_return_vs_spy;
@@ -24,7 +67,7 @@ function card(bot) {
     ? '<span class="badge live">LIVE</span>'
     : '<span class="badge idle">seed</span>';
   return '\
-  <a class="card" href="/bot/' + bot.id + '">\
+  <a class="card" href="/bot/' + bot.id + '" data-bot-id="' + bot.id + '">\
     <div class="card-head">\
       <h3>' + bot.name + '</h3>\
       ' + liveBadge + '\
@@ -32,14 +75,14 @@ function card(bot) {
     <div class="tag">' + (bot.tagline || "") + '</div>\
     <div class="sparkline-wrap"><canvas class="sparkline" data-bot="' + bot.id + '"></canvas></div>\
     <div class="stats-row">\
-      <div class="stat"><div class="label">Equity</div><div class="value">' + money(m.current_equity) + '</div></div>\
-      <div class="stat"><div class="label">CAGR</div><div class="value ' + cls(m.cagr) + '">' + pct(m.cagr) + '</div></div>\
-      <div class="stat"><div class="label">vs SPY</div><div class="value ' + cls(excess) + '">' + pct(excess) + '</div></div>\
+      <div class="stat" data-field="current_equity"><div class="label">Equity</div><div class="value">' + money(m.current_equity) + '</div></div>\
+      <div class="stat" data-field="cagr"><div class="label">CAGR</div><div class="value ' + cls(m.cagr) + '">' + pct(m.cagr) + '</div></div>\
+      <div class="stat" data-field="excess"><div class="label">vs SPY</div><div class="value ' + cls(excess) + '">' + pct(excess) + '</div></div>\
     </div>\
     <div class="stats-row">\
-      <div class="stat"><div class="label">Sharpe</div><div class="value">' + num(m.sharpe) + '</div></div>\
-      <div class="stat"><div class="label">Sortino</div><div class="value">' + num(m.sortino) + '</div></div>\
-      <div class="stat"><div class="label">Max DD</div><div class="value neg">' + pct(m.max_drawdown) + '</div></div>\
+      <div class="stat" data-field="sharpe"><div class="label">Sharpe</div><div class="value">' + num(m.sharpe) + '</div></div>\
+      <div class="stat" data-field="sortino"><div class="label">Sortino</div><div class="value">' + num(m.sortino) + '</div></div>\
+      <div class="stat" data-field="max_drawdown"><div class="label">Max DD</div><div class="value neg">' + pct(m.max_drawdown) + '</div></div>\
     </div>\
     <div class="regime">Regime: ' + (bot.regime || "—") + '</div>\
   </a>';
@@ -65,15 +108,36 @@ function drawSparkline(canvas, points) {
 
   var dark = document.documentElement.getAttribute("data-theme") === "dark";
   var up = vals[vals.length - 1] >= vals[0];
-  ctx.strokeStyle = up ? (dark ? "#34c76a" : "#0a7d38") : (dark ? "#f05048" : "#d6332b");
-  ctx.lineWidth = 1.5;
-  ctx.beginPath();
-  for (var i = 0; i < vals.length; i++) {
+  var strokeColor = up ? (dark ? "#34c76a" : "#0a7d38") : (dark ? "#f05048" : "#d6332b");
+
+  function pointAt(i) {
     var x = (i / (vals.length - 1)) * (w - pad * 2) + pad;
     var y = h - pad - ((vals[i] - min) / range) * (h - pad * 2);
-    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    return [x, y];
   }
-  ctx.stroke();
+
+  // animate the line drawing left-to-right
+  var start = null;
+  var duration = 600;
+  function frame(ts) {
+    if (!start) start = ts;
+    var elapsed = ts - start;
+    var progress = Math.min(1, elapsed / duration);
+    var visibleCount = Math.max(2, Math.round(progress * vals.length));
+
+    ctx.clearRect(0, 0, w, h);
+    ctx.strokeStyle = strokeColor;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    for (var i = 0; i < visibleCount; i++) {
+      var p = pointAt(i);
+      i === 0 ? ctx.moveTo(p[0], p[1]) : ctx.lineTo(p[0], p[1]);
+    }
+    ctx.stroke();
+
+    if (progress < 1) requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
 }
 
 function loadSparklines(bots) {
@@ -96,28 +160,80 @@ function loadSparklines(bots) {
 }
 
 var _bots = [];
+var _firstLoad = true;
+var _prevValues = {};   // bot.id -> { field: rawValue }
+
+function flashChangedValues(bots) {
+  bots.forEach(function (bot) {
+    var m = bot.metrics.strategy;
+    var excess = bot.metrics.excess_return_vs_spy;
+    var current = {
+      current_equity: m.current_equity,
+      cagr: m.cagr,
+      excess: excess,
+      sharpe: m.sharpe,
+      sortino: m.sortino,
+      max_drawdown: m.max_drawdown,
+    };
+    var prev = _prevValues[bot.id];
+    if (prev) {
+      Object.keys(current).forEach(function (field) {
+        if (prev[field] !== undefined && prev[field] !== current[field]) {
+          var sel = document.querySelector('.card[data-bot-id="' + bot.id + '"] .stat[data-field="' + field + '"] .value');
+          if (sel) {
+            sel.classList.remove("value-flash");
+            void sel.offsetWidth; // restart animation
+            sel.classList.add("value-flash");
+          }
+        }
+      });
+    }
+    _prevValues[bot.id] = current;
+  });
+}
+
+function showRefreshIndicator() {
+  var el = document.getElementById("refresh-indicator");
+  if (!el) return;
+  el.classList.add("active");
+  clearTimeout(el._hideTimer);
+  el._hideTimer = setTimeout(function () { el.classList.remove("active"); }, 1200);
+}
 
 async function load() {
+  var grid = document.getElementById("grid");
   try {
+    if (_firstLoad) {
+      grid.innerHTML = skeletonGrid(3);
+    }
     var res = await fetch("/api/bots");
     var data = await res.json();
-    var grid = document.getElementById("grid");
     if (!data.bots.length) {
       grid.innerHTML = '<div class="loading">No bots registered.</div>';
       return;
     }
     _bots = data.bots;
+
+    if (!_firstLoad) {
+      // flash existing cards instead of a full re-render jolt
+      flashChangedValues(data.bots);
+      showRefreshIndicator();
+    }
+
     grid.innerHTML = data.bots.map(card).join("");
     loadSparklines(data.bots);
+    if (_firstLoad) flashChangedValues(data.bots);
+    _firstLoad = false;
   } catch (e) {
-    document.getElementById("grid").innerHTML =
-      '<div class="loading">Failed to load bots.</div>';
+    grid.innerHTML = '<div class="loading">Failed to load bots.</div>';
   }
 }
 
 function tick() {
-  document.getElementById("clock").textContent =
-    "Updated " + new Date().toLocaleTimeString();
+  var el = document.getElementById("clock");
+  el.textContent = "Updated " + new Date().toLocaleTimeString();
+  el.classList.add("tick-flash");
+  setTimeout(function () { el.classList.remove("tick-flash"); }, 400);
 }
 
 // redraw sparklines on theme change
@@ -125,9 +241,17 @@ window.onThemeChange = function () {
   if (_bots.length) loadSparklines(_bots);
 };
 
-// WebSocket: refresh on tick
+// WebSocket: refresh on tick, with a toast the first time live data connects
+var _wsToastShown = false;
 window.onWsMessage = function (msg) {
-  if (msg.type === "tick") { load(); tick(); }
+  if (msg.type === "tick") {
+    load();
+    tick();
+    if (!_wsToastShown) {
+      toast("Live data connected", "⚡");
+      _wsToastShown = true;
+    }
+  }
 };
 
 load();
