@@ -189,6 +189,16 @@ def last_live_ts(bot_id: str) -> Optional[str]:
     return row["m"] if row and row["m"] else None
 
 
+def live_dates(bot_id: str) -> set[str]:
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT DISTINCT substr(ts,1,10) AS d FROM equity_points"
+            " WHERE bot_id=? AND source='live'",
+            (bot_id,),
+        ).fetchall()
+    return {r["d"] for r in rows}
+
+
 def has_backtest(bot_id: str) -> bool:
     with get_conn() as conn:
         row = conn.execute(

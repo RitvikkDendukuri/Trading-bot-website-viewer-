@@ -141,13 +141,21 @@ def _refresh_recent(bot_id: str) -> None:
         scale_spy = existing_spy / spy_pts[0][1] if spy_pts[0][1] > 0 else 1.0
         points["spy"] = [(ts, v * scale_spy) for ts, v in points["spy"]]
 
+    # don't overwrite dates that already have live data
+    live_dates = db.live_dates(bot_id)
+    for series in list(points.keys()):
+        if series == "allocations":
+            continue
+        points[series] = [(ts, v) for ts, v in points[series] if ts[:10] not in live_dates]
+
     allocations = points.pop("allocations", [])
     if allocations:
         alloc_rows = [{"date": a["date"], "data": json.dumps(a)} for a in allocations]
         db.save_daily_allocations(bot_id, alloc_rows)
 
     n = db.refresh_backtest_window(bot_id, cutoff, points)
-    log.info("Refreshed last %dd of %s (%d pts).", REFRESH_WINDOW_DAYS, bot_id, n)
+    log.info("Refreshed last %dd of %s (%d pts, skipped %d live dates).",
+             REFRESH_WINDOW_DAYS, bot_id, n, len(live_dates))
 
     try:
         regime = strat.latest_regime()
