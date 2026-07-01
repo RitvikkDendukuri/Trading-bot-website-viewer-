@@ -16,7 +16,12 @@ START_DATE = os.environ.get("SEED_START_DATE", "2026-01-01")
 INITIAL_CAPITAL = float(os.environ.get("SEED_INITIAL_CAPITAL", "100000"))
 POLL_SECONDS = int(os.environ.get("POLL_SECONDS", "60"))
 REFRESH_WINDOW_DAYS = int(os.environ.get("REFRESH_WINDOW_DAYS", "30"))
-SEED_DIR = Path(__file__).resolve().parents[2] / "data"
+# Seeds are baked into the image at seeds/ — deliberately NOT under data/, which is
+# the persistent-disk mount on Render. A mount shadows any files committed under it,
+# so keeping seeds out of data/ guarantees they're always readable for an instant
+# cold start, while the SQLite DB stays on the disk so live data survives restarts.
+SEED_DIR = Path(__file__).resolve().parents[2] / "seeds"
+_LEGACY_SEED_DIR = Path(__file__).resolve().parents[2] / "data"
 
 _stop = threading.Event()
 
@@ -26,6 +31,8 @@ _stop = threading.Event()
 def _load_seed_file(bot_id: str) -> bool:
     # load pre-baked backtest from committed JSON — instant cold start
     path = SEED_DIR / f"seed_{bot_id}.json"
+    if not path.exists():
+        path = _LEGACY_SEED_DIR / f"seed_{bot_id}.json"   # pre-move fallback
     if not path.exists():
         return False
     try:

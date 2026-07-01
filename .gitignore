@@ -4,6 +4,7 @@ __pycache__/
 data/*.db
 data/*.db-wal
 data/*.db-shm
+# committed seeds now live in seeds/ (outside the Render disk mount at data/)
 !data/seed_*.json
 *.csv
 .DS_Store
