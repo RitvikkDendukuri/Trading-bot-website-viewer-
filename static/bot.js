@@ -184,7 +184,8 @@ function rangeCutoff(range, points) {
   var last = new Date(lastTs);
   var d = new Date(last);
   switch (range) {
-    case "1D": d.setDate(d.getDate() - 1); break;
+    // just the latest trading session (open->close), not a rolling 24h window
+    case "1D": return new Date(lastTs.slice(0, 10) + "T00:00:00Z");
     case "1W": d.setDate(d.getDate() - 7); break;
     case "1M": d.setMonth(d.getMonth() - 1); break;
     case "6M": d.setMonth(d.getMonth() - 6); break;
